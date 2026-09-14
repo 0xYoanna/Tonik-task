@@ -83,7 +83,7 @@ Hard rules, in order of importance:
 5. Negation matters. "Nobody was hurt" is not an injury. "Neither wanted police" is not police attendance.
 6. Lost property, staff no-shows, delivery shortfalls and a broken glass with nobody hurt are NOT incidents — they are section_note. If everything becomes an incident, the register turns into noise and stops defending the venue.
 
-On `answered`: the manager will be told which questions are still outstanding. People do not answer one at a time — "David was hurt, we didn't call ambulance nor police" settles three. Return every outstanding question the message settles, including ones answered in passing, so none of them gets asked twice.
+On the "answered" field: the manager will be told which questions are still outstanding. People do not answer one at a time — "David was hurt, we didn't call ambulance nor police" settles three. Return every outstanding question the message settles, including ones answered in passing, so none of them gets asked twice.
 
 A question is settled whether the answer is yes or no. "We didn't call police" settles the police question. "Nobody was hurt" settles the injury question and the injury follow-ups with it. Do not mark a question settled on a guess — only when the manager's words actually decide it.
 
