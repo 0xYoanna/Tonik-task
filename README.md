@@ -23,7 +23,8 @@ makes the rigorous thing convenient enough to survive 3am.
 > written out of the back of the answers.
 
 The full argument, the research behind it and the competitive read are in
-[docs/PRD.md](docs/PRD.md).
+[docs/PRD.md](docs/PRD.md); the incident taxonomy and the statutory field set
+are in [docs/INCIDENT-TYPES.md](docs/INCIDENT-TYPES.md).
 
 ---
 
@@ -124,7 +125,6 @@ at 3am.
 ```
 docs/
   PRD.md                 the argument, the research, the competitive read
-  FLOW.md                the end-of-shift flow, mapped
   INCIDENT-TYPES.md      taxonomy and the statutory field set
 
 api/analyse.js           server-side model call (also a Vercel function)

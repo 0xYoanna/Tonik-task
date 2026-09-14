@@ -1,5 +1,4 @@
 {
   "buildCommand": "vite build",
-  "outputDirectory": "dist",
-  "rewrites": [{ "source": "/api/analyse", "destination": "/api/analyse.js" }]
+  "outputDirectory": "dist"
 }
