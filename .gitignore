@@ -1,0 +1,12 @@
+node_modules
+dist
+.DS_Store
+*.local
+
+# never commit the key
+.env
+.env.local
+.vercel
+
+# machine-local Claude Code permissions
+.claude/settings.local.json
