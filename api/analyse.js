@@ -35,6 +35,21 @@ const Incident = z.object({
   description: z.string().describe("The manager's own words, verbatim."),
 });
 
+/* The questions the conversation can ask. The model is told which
+   are still outstanding and returns the ones this message settles
+   — replacing a pile of regexes that guessed at the same thing and
+   kept getting the scope wrong. */
+const Answered = z.object({
+  key: z.string().describe(
+    "One of: type, occurredAt, location, involved, staff, injury, " +
+      "injuryDetail, riddor, action, policeRef, witnesses, footage.",
+  ),
+  value: z.string().describe(
+    "What the manager said about it, in their words. Empty string if they " +
+      "settled it without detail (e.g. ruling something out).",
+  ),
+});
+
 const Analysis = z.object({
   kind: z.enum(["incident", "section_note", "nothing", "off_topic"]).describe(
     "incident = something for the statutory register. section_note = about " +
@@ -47,6 +62,10 @@ const Analysis = z.object({
     "Report sections this touches, from: overview, incidents, audience, " +
       "security, artists, door, production, bar, kitchen, vendors, private, " +
       "maintenance, inventory.",
+  ),
+  answered: z.array(Answered).describe(
+    "Every outstanding question this message settles, including ones the " +
+      "manager answered in passing. Only questions from the outstanding list.",
   ),
   reasoning: z.string().describe("One short sentence. Shown to nobody; for logs."),
 });
@@ -64,11 +83,15 @@ Hard rules, in order of importance:
 5. Negation matters. "Nobody was hurt" is not an injury. "Neither wanted police" is not police attendance.
 6. Lost property, staff no-shows, delivery shortfalls and a broken glass with nobody hurt are NOT incidents — they are section_note. If everything becomes an incident, the register turns into noise and stops defending the venue.
 
+On `answered`: the manager will be told which questions are still outstanding. People do not answer one at a time — "David was hurt, we didn't call ambulance nor police" settles three. Return every outstanding question the message settles, including ones answered in passing, so none of them gets asked twice.
+
+A question is settled whether the answer is yes or no. "We didn't call police" settles the police question. "Nobody was hurt" settles the injury question and the injury follow-ups with it. Do not mark a question settled on a guess — only when the manager's words actually decide it.
+
 Keep descriptions verbatim. Do not tidy the manager's grammar.`;
 
 const client = new Anthropic();
 
-export async function analyse({ text, floorplan = [], now = "" }) {
+export async function analyse({ text, floorplan = [], now = "", outstanding = [] }) {
   const response = await client.messages.parse({
     model: "claude-opus-5",
     max_tokens: 4096,
@@ -80,6 +103,7 @@ export async function analyse({ text, floorplan = [], now = "" }) {
         role: "user",
         content: `Venue floorplan (the only valid locations): ${floorplan.join(", ")}
 Current time on shift: ${now || "unknown"}
+Questions still outstanding: ${outstanding.length ? outstanding.join(", ") : "none"}
 
 The manager said:
 """
