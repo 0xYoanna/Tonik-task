@@ -367,6 +367,33 @@ export function harvest(inc, text) {
   if (mentions(lower, /\bfirst aid\b/)) add("first_aid", "First aid given");
   if (mentions(lower, /\b(banned|barred)\b/)) add("banned", "Person banned");
 
+  /* "Ambulance was called but he didn't want the police" describes
+     what was done. Asking "what was done about it?" straight after
+     is the exact complaint this whole pass exists to stop — so any
+     action vocabulary settles that question too. */
+  const ACTIONS_SEEN = [
+    [/\bambulance|paramedics?\b/, "Ambulance called"],
+    [/\bpolice|cops\b/, "Police called"],
+    [/\bfirst aid\b/, "First aid given"],
+    [/\b(ejected|kicked out|thrown out|removed|put (him|her|them) out|escorted out)\b/, "Ejected"],
+    [/\b(banned|barred)\b/, "Banned"],
+    [/\b(refused service|cut off|stopped serving)\b/, "Refused service"],
+    [/\b(warned|given a warning)\b/, "Warned"],
+  ];
+  const taken = [];
+  let sawAction = false;
+  for (const [re, label] of ACTIONS_SEEN) {
+    const m = mentions(lower, re);
+    if (!m) continue;
+    sawAction = true;
+    if (!m.negated) taken.push(label);
+  }
+  if (sawAction) {
+    asked.add("action");
+    if (taken.length)
+      next.actionTaken = [...new Set([...(next.actionTaken ?? []), ...taken])];
+  }
+
   /* Staff are a closed list, so a name in the text is unambiguous. */
   const named = rota.filter((r) =>
     new RegExp(`\\b${r.name.split(" ")[0]}\\b`, "i").test(text),
