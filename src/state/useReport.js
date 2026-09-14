@@ -31,6 +31,12 @@ const msg = (role, kind, text, extra = {}) => ({
   id: `m${++mid}`, role, kind, text, at: Date.now(), ...extra,
 });
 
+export const APPROVE_Q = {
+  key: "approve",
+  field: "approve",
+  q: "Does that read right? Say yes to file it, or tell me what to change.",
+};
+
 export const initialState = {
   thread: [],
   mode: "report", // quick = mid-shift, one exchange · report = end of shift
@@ -215,6 +221,27 @@ export function reducer(state, action) {
               : i,
           );
           return advance({ ...next, incidents, pending: null });
+        } else if (question.key === "approve") {
+          if (saidYes(text)) {
+            return {
+              ...next,
+              incidents,
+              pending: null,
+              phase: "summary",
+              thread: [...thread, msg("ai", "text",
+                "Filed as written. Sign it off and it's in the register.")],
+            };
+          }
+          /* A change request rewrites the account rather than
+             patching it, so the prose and the record can't drift. */
+          return {
+            ...next,
+            incidents,
+            pending: null,
+            drafting: true,
+            narrativeNote: [state.narrativeNote, text].filter(Boolean).join(" "),
+            thread: [...thread, msg("ai", "text", "Understood — rewriting it.")],
+          };
         } else if (question.key === "confirm") {
           if (saidYes(text)) {
             incidents = incidents.map((i) =>
@@ -355,8 +382,9 @@ export function reducer(state, action) {
         return {
           ...next,
           incidents,
-          thread: [...thread, msg("ai", "text", "Right — here's what I'll file.")],
-          phase: "summary",
+          drafting: true,
+          thread: [...thread, msg("ai", "text",
+            "Right. Let me write it up — this is the part a solicitor reads.")],
         };
       }
 
@@ -508,6 +536,22 @@ export function reducer(state, action) {
     case "back":
       return { ...state, phase: "talking" };
 
+    /* The written account, once the record is complete. Nothing is
+       filed until the manager has read it and said so. */
+    case "narrative":
+      return {
+        ...state,
+        drafting: false,
+        narrative: action.narrative,
+        narrativeSource: action.source,
+        pending: { question: APPROVE_Q },
+        thread: [
+          ...state.thread,
+          msg("ai", "narrative", "", { narrative: action.narrative }),
+          msg("ai", "question", APPROVE_Q.q, { question: APPROVE_Q }),
+        ],
+      };
+
     case "toggle-report":
       return { ...state, showReport: !state.showReport };
 
@@ -577,6 +621,7 @@ export function buildValue(state, dispatch) {
       addPerson: (id, person) => dispatch({ type: "add-person", id, person }),
       toSummary: () => dispatch({ type: "summary" }),
       logIncident: () => dispatch({ type: "log-incident" }),
+      setNarrative: (narrative, source) => dispatch({ type: "narrative", narrative, source }),
       addReport: () => dispatch({ type: "add-report" }),
       toggleReport: () => dispatch({ type: "toggle-report" }),
       skipSection: (key) => dispatch({ type: "skip-section", key }),

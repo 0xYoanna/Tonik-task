@@ -1,5 +1,7 @@
 import { ArrowLeft, FileCheck2, PanelRightOpen, Zap } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { useReport } from "../state/useReport.js";
+import { narrate } from "../lib/narrative.js";
 import { shiftNow } from "../lib/clock.js";
 import Thread from "../components/Thread.jsx";
 import Composer from "../components/Composer.jsx";
@@ -20,6 +22,18 @@ import { Badge } from "@/components/ui/badge";
 export default function Conversation() {
   const report = useReport();
   const quick = report.mode === "quick";
+  const drafting = useRef(false);
+
+  /* Writing the account takes longer than a classification, so it
+     gets its own call rather than blocking the conversation. */
+  useEffect(() => {
+    if (!report.drafting || drafting.current) return;
+    drafting.current = true;
+    narrate(report.logged, report.covered, report.narrativeNote).then(({ narrative, source }) => {
+      drafting.current = false;
+      report.setNarrative(narrative, source);
+    });
+  }, [report.drafting]);
 
   return (
     <>
