@@ -16,7 +16,7 @@ import { detect, severityOf, preservationWindow, cameraFor, TYPES } from "../lib
 import {
   nextQuestion, applyAnswer, isReady, saysDone, saysNothing, opening,
   reportOpening, looksSubstantive, unclassified, groupOf, saysAttaching, isOffTopic,
-  CONFIRM_Q, CHANGE_Q, saidYes, applyCorrection,
+  CONFIRM_Q, CHANGE_Q, saidYes, saidNo, applyCorrection,
 } from "../lib/conversation.js";
 import { evidence } from "../data/sampleShift.js";
 import { shiftNow } from "../lib/clock.js";
@@ -177,7 +177,16 @@ export function reducer(state, action) {
       const thread = [...state.thread, msg("manager", "text", text)];
       const raw = [...state.raw, { id: `raw_${state.raw.length + 1}`, text, at: new Date().toISOString() }];
       let incidents = [...state.incidents];
-      let next = { ...state, thread, raw, thinking: false };
+      let next = {
+        ...state,
+        thread,
+        raw,
+        thinking: false,
+        /* Which reader answered last — surfaced in the header so
+           "is the model actually running?" is answerable without
+           a curl. */
+        lastSource: action.analysis?.source ?? "keywords",
+      };
 
       /* Answering the question it just asked. */
       if (state.pending) {
@@ -213,13 +222,29 @@ export function reducer(state, action) {
                 "Saved. It'll be in tonight's shift report.")],
             });
           }
-          /* No — find out what's wrong before writing anything. */
-          return {
+          /* An explicit no — find out what's wrong before writing. */
+          if (saidNo(text)) {
+            return {
+              ...next,
+              incidents,
+              pending: { incidentId, question: CHANGE_Q },
+              thread: [...thread, msg("ai", "question", CHANGE_Q.q, { question: CHANGE_Q, incidentId })],
+            };
+          }
+
+          /* Neither yes nor no: they're still telling us what
+             happened. Fold it into the record and show it again —
+             a person who keeps talking is adding detail, not
+             rejecting the draft. */
+          incidents = incidents.map((i) =>
+            i.id === incidentId ? applyCorrection(i, text) : i,
+          );
+          return advance({
             ...next,
             incidents,
-            pending: { incidentId, question: CHANGE_Q },
-            thread: [...thread, msg("ai", "question", CHANGE_Q.q, { question: CHANGE_Q, incidentId })],
-          };
+            pending: null,
+            thread: [...thread, msg("ai", "text", "Added that.")],
+          });
         } else if (question.key === "change") {
           incidents = incidents.map((i) =>
             i.id === incidentId ? applyCorrection(i, text) : i,

@@ -417,6 +417,19 @@ export function saidYes(text) {
   return AFFIRMATIVE.test(text) && !NEGATIVE.test(text);
 }
 
+/* Must be an explicit no. Treating "not yes" as "no" is what made
+   the conversation feel like an interrogation: a manager who keeps
+   describing the incident instead of answering was being told
+   their record was wrong. */
+export function saidNo(text) {
+  const t = text.trim();
+  /* A bare no, on its own. "no injuries, they just left" opens
+     with the same word and is detail, not a rejection — so the
+     bare forms have to stand alone to count. */
+  if (/^(no|nope|nah|wrong|incorrect|not really)[.!]?$/i.test(t)) return true;
+  return /\b(that'?s wrong|not right|isn'?t right|not correct|change it|fix it|that'?s not)\b/i.test(t);
+}
+
 /* A correction arrives as a sentence, not a form: "it was bar 2,
    not the smoking area". Re-read it with the same parsers that
    read the original account and apply whatever it carries. */
