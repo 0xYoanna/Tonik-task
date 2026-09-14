@@ -17,6 +17,7 @@ import {
   TYPES, findTimes, findLocations, cameraFor, preservationWindow, matchKeyword,
 } from "./detector.js";
 import { venue, rota } from "../data/sampleShift.js";
+import { shiftNow } from "./clock.js";
 
 /* ── The question set ──────────────────────────────────────────
    Ordered by what a register entry has to carry, from PRD §9 and
@@ -123,7 +124,12 @@ export function nextQuestion(inc, quick = false) {
     };
 
   if (!inc.occurredAt && pending("occurredAt"))
-    return { key: "occurredAt", field: "occurredAt", q: "What time did that happen?" };
+    return {
+      key: "occurredAt",
+      field: "occurredAt",
+      q: quick ? "When did this happen?" : "What time did that happen?",
+      options: quick ? ["Just now", LOG_AS_IS] : undefined,
+    };
 
   /* Location is statutory, and it's also what names the camera —
      without it the footage flag has nothing to point at. */
@@ -132,13 +138,24 @@ export function nextQuestion(inc, quick = false) {
       key: "location",
       field: "location",
       q: "Whereabouts in the venue?",
-      options: ["Front door", "Dancefloor", "Smoking area", "Bar 2", "Toilets"],
+      options: quick
+        ? ["Front door", "Dancefloor", "Smoking area", "Bar 2", LOG_AS_IS]
+        : ["Front door", "Dancefloor", "Smoking area", "Bar 2", "Toilets"],
     };
 
-  /* Mid-shift, that's everything worth asking. The manager is
-     standing up with a radio in their hand — the rest waits for
-     the end of the night, where there's time to answer it. */
-  if (quick) return null;
+  /* One probe for detail while it's fresh — memory at 01:42 is
+     better than memory at 03:40 — then it stops. Everything else
+     waits for the end of the night. */
+  if (quick) {
+    if (pending("detail"))
+      return {
+        key: "detail",
+        field: "note",
+        q: "What happened?",
+        options: [LOG_AS_IS],
+      };
+    return null;
+  }
 
   for (const q of QUESTIONS) {
     if (!pending(q.key)) continue;
@@ -181,6 +198,10 @@ export function applyAnswer(inc, question, text) {
 
   switch (question.field) {
     case "occurredAt": {
+      if (/just now|right now|now|this minute/i.test(answer)) {
+        next.occurredAt = shiftNow();
+        break;
+      }
       const t = findTimes(answer)[0];
       if (t) {
         next.occurredAt = t.value;
@@ -398,6 +419,18 @@ export function reportOpening(incidents) {
       ? "A few details got left for now. Let me pick those up, then anything else from the night."
       : "Anything else from the night?",
   ];
+}
+
+/* Always on the table while it's probing. The manager is standing
+   up with a radio in their hand — every question has to be
+   skippable in one tap, or the probing becomes the interrogation
+   the quick log exists to avoid. */
+export const LOG_AS_IS = "Log it as is";
+
+export const QUICK_KEYS = ["type", "occurredAt", "location", "detail"];
+
+export function saidLogAsIs(text) {
+  return /log it as is|as is|just log it|that'?s enough|log that/i.test(text);
 }
 
 export const CONFIRM_Q = {
