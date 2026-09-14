@@ -48,6 +48,26 @@ export default function Conversation() {
 
         <div className="flex-1" />
 
+        {report.lastSource && (
+          <span
+            className="flex items-center gap-1.5 text-xs text-muted-foreground"
+            title={
+              report.lastSource === "model"
+                ? "Read by Claude Opus 5 via /api/analyse"
+                : "Read by the local keyword detector — no API key, or the call failed"
+            }
+          >
+            <span
+              className={
+                report.lastSource === "model"
+                  ? "size-1.5 rounded-full bg-primary"
+                  : "size-1.5 rounded-full bg-muted-foreground/40"
+              }
+            />
+            {report.lastSource === "model" ? "model" : "keywords"}
+          </span>
+        )}
+
         <span className="text-xs text-muted-foreground">
           {quick
             ? "Logged now, details at close"
