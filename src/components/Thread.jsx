@@ -5,6 +5,7 @@ import Checklist from "./Checklist.jsx";
 import QuickStart from "./QuickStart.jsx";
 import { evidence } from "../data/sampleShift.js";
 import { Badge } from "@/components/ui/badge";
+import { FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /* The conversation. Grows upward from the composer, like every
@@ -114,6 +115,30 @@ export default function Thread() {
             </div>
           );
 
+        /* The written account. Rendered as a document because
+           that is what it is — the thing a licensing officer
+           reads, not a message. */
+        if (m.kind === "narrative")
+          return (
+            <article
+              key={m.id}
+              className="max-w-[42rem] rounded-lg border bg-card p-5 shadow-sm"
+            >
+              <div className="mb-3 flex items-center gap-2 border-b pb-2">
+                <FileText className="size-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Written account</span>
+                <span className="text-xs text-muted-foreground">
+                  for the register
+                </span>
+              </div>
+              {m.narrative.split(/\n\n+/).map((para, i) => (
+                <p key={i} className="mb-3 text-sm leading-relaxed last:mb-0">
+                  {para}
+                </p>
+              ))}
+            </article>
+          );
+
         if (m.kind === "record") {
           const inc = report.byId(m.incidentId);
           return inc ? (
@@ -147,8 +172,13 @@ export default function Thread() {
         return (
           <Bubble key={m.id}>
             {m.text}
-            {/* Quick answers, so a four-word reply is one click. */}
-            {m.question?.options && report.pending?.question?.key === m.question.key && (
+            {/* Quick answers on the floor, where typing is the
+                cost. At close the manager is sat down and the
+                account is theirs to write — buttons there would
+                put words in their mouth. */}
+            {report.mode === "quick" &&
+              m.question?.options &&
+              report.pending?.question?.key === m.question.key && (
               <div className="mt-3 flex flex-wrap gap-2">
                 {m.question.options.map((opt) => (
                   <Button
@@ -159,14 +189,14 @@ export default function Thread() {
                   >
                     {opt}
                   </Button>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
           </Bubble>
         );
       })}
 
-      {report.thinking && (
+      {(report.thinking || report.drafting) && (
         <div className="flex items-center gap-1.5 px-1 py-1">
           {[0, 150, 300].map((d) => (
             <span

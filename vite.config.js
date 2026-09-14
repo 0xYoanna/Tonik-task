@@ -10,13 +10,14 @@ function apiRoutes() {
   return {
     name: "api-routes",
     configureServer(server) {
-      server.middlewares.use("/api/analyse", async (req, res, next) => {
+      for (const route of ["analyse", "narrative"])
+      server.middlewares.use(`/api/${route}`, async (req, res, next) => {
         if (req.method !== "POST") return next();
         let raw = "";
         for await (const chunk of req) raw += chunk;
         req.body = raw;
         try {
-          const { default: handler } = await server.ssrLoadModule("/api/analyse.js");
+          const { default: handler } = await server.ssrLoadModule(`/api/${route}.js`);
           await handler(req, res);
         } catch (err) {
           res.statusCode = 500;
