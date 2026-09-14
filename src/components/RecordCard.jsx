@@ -1,9 +1,6 @@
-import { useState } from "react";
 import { Camera, Users, Clock, MapPin, Tag } from "lucide-react";
 import { useReport } from "../state/useReport.js";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { evidence } from "../data/sampleShift.js";
 
@@ -34,8 +31,6 @@ function Row({ icon: Icon, label, value, onFix }) {
 
 export default function RecordCard({ incident: inc }) {
   const report = useReport();
-  const [naming, setNaming] = useState(false);
-  const [person, setPerson] = useState("");
 
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
@@ -85,48 +80,6 @@ export default function RecordCard({ incident: inc }) {
           </div>
         )}
 
-        {/* Naming a person is the one thing it never does for them. */}
-        <div className="mt-2.5 border-t border-border pt-2">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground">Persons involved</span>
-            <span className="text-xs font-medium text-muted-foreground text-muted-foreground">— never filled in for you</span>
-            <div className="flex-1" />
-            {!naming && (
-              <Button size="xs" variant="ghost" onClick={() => setNaming(true)}>
-                + add
-              </Button>
-            )}
-          </div>
-          {inc.personsInvolved?.length > 0 && (
-            <div className="mt-1 flex flex-wrap gap-1.5">
-              {inc.personsInvolved.map((p, i) => (
-                <Badge key={i} variant="outline">{p}</Badge>
-              ))}
-            </div>
-          )}
-          {naming && (
-            <div className="mt-1.5">
-              <p className="mb-1.5 text-xs leading-relaxed text-muted-foreground">
-                This goes into a register kept for four years. Only add a name
-                you're certain of.
-              </p>
-              <div className="flex gap-1.5">
-                <Input
-                  autoFocus
-                  value={person}
-                  onChange={(e) => setPerson(e.target.value)}
-                  placeholder="name or description"
-                  className="h-7 flex-1 text-xs"
-                />
-                <Button size="xs" onClick={() => {
-                  if (person.trim()) report.addPerson(inc.id, person.trim());
-                  setPerson(""); setNaming(false);
-                }}>add</Button>
-                <Button size="xs" variant="ghost" onClick={() => setNaming(false)}>cancel</Button>
-              </div>
-            </div>
-          )}
-        </div>
       </div>
 
       {inc.preservation && (

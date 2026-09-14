@@ -149,9 +149,14 @@ export default function Thread() {
             {m.text}
             {/* Quick answers, so a four-word reply is one click. */}
             {m.question?.options && report.pending?.question?.key === m.question.key && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
+              <div className="mt-3 flex flex-wrap gap-2">
                 {m.question.options.map((opt) => (
-                  <Button key={opt} size="xs" variant="outline" onClick={() => report.say(opt)}>
+                  <Button
+                    key={opt}
+                    size="default"
+                    variant="outline"
+                    onClick={() => report.say(opt)}
+                  >
                     {opt}
                   </Button>
                 ))}

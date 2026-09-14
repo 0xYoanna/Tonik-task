@@ -16,7 +16,7 @@ import { detect, severityOf, preservationWindow, cameraFor, TYPES } from "../lib
 import {
   nextQuestion, applyAnswer, isReady, saysDone, saysNothing, opening,
   reportOpening, looksSubstantive, unclassified, groupOf, saysAttaching, isOffTopic,
-  CONFIRM_Q, CHANGE_Q, saidYes, saidNo, applyCorrection,
+  CONFIRM_Q, CHANGE_Q, saidYes, saidNo, applyCorrection, saidLogAsIs, QUICK_KEYS,
 } from "../lib/conversation.js";
 import { evidence } from "../data/sampleShift.js";
 import { shiftNow } from "../lib/clock.js";
@@ -206,6 +206,14 @@ export function reducer(state, action) {
               msg("ai", "record-group", "", { ids: groupIds }),
             ];
           }
+        } else if (saidLogAsIs(text)) {
+          /* Escape hatch: stop probing, keep what we have. */
+          incidents = incidents.map((i) =>
+            i.id === incidentId
+              ? { ...i, asked: [...new Set([...(i.asked ?? []), ...QUICK_KEYS])] }
+              : i,
+          );
+          return advance({ ...next, incidents, pending: null });
         } else if (question.key === "confirm") {
           if (saidYes(text)) {
             incidents = incidents.map((i) =>
@@ -373,9 +381,10 @@ export function reducer(state, action) {
         id: `${inc.id}_${state.raw.length}`,
         asked: [],
         proposed: { ...inc },
-        /* Logged as it happens: "now" is the answer, so the most
-           common gap in the whole product never opens. */
-        occurredAt: state.mode === "quick" ? (inc.occurredAt ?? shiftNow()) : inc.occurredAt,
+        /* No silent stamp. A brawl reported at 01:42 may have
+           happened at 01:20, and inventing the time is the one
+           thing this product must never do — so it asks, with
+           "Just now" one tap away. */
         capturedAt: state.mode === "quick" ? shiftNow() : null,
       }));
 
