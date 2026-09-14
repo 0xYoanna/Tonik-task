@@ -383,6 +383,71 @@ export function harvest(inc, text) {
   return next;
 }
 
+/* Which questions are still open on this record. Sent to the model
+   so it can tell us which ones a message settles, rather than us
+   guessing from keywords. */
+export function outstandingKeys(inc, quick = false) {
+  if (!inc) return [];
+  const keys = [];
+  let probe = { ...inc, asked: [...(inc.asked ?? [])] };
+  for (let i = 0; i < 20; i += 1) {
+    const q = nextQuestion(probe, quick);
+    if (!q) break;
+    keys.push(q.key);
+    probe.asked.push(q.key);
+  }
+  return keys;
+}
+
+/* The model's verdict on what a message settled. Same job as
+   harvest(), done by something that reads rather than matches. */
+export function applyAnswered(inc, answered = []) {
+  if (!answered.length) return inc;
+  const next = { ...inc };
+  const asked = new Set(next.asked ?? []);
+  const outcomes = [...(next.outcomes ?? [])];
+  const add = (key, label) => {
+    if (!outcomes.some((o) => o.key === key)) outcomes.push({ key, label });
+  };
+
+  for (const { key, value } of answered) {
+    asked.add(key);
+    const v = (value ?? "").trim();
+    if (!v) continue;
+
+    if (key === "occurredAt") {
+      const t = findTimes(v)[0];
+      if (t) next.occurredAt = t.value;
+    } else if (key === "location") {
+      const l = findLocations(v)[0];
+      if (l) next.location = l.value;
+    } else if (key === "injury") {
+      next.injury = !NEGATIVE.test(v);
+      if (next.injury) add("harm", "Someone was injured");
+      else {
+        asked.add("injuryDetail");
+        asked.add("riddor");
+      }
+    } else if (key === "staff") {
+      const named = rota.filter((r) =>
+        new RegExp(`\\b${r.name.split(" ")[0]}\\b`, "i").test(v),
+      );
+      if (named.length)
+        next.staffPresent = [...new Set([...(next.staffPresent ?? []), ...named.map((r) => r.name)])];
+    } else if (key === "action") {
+      next.actionTaken = [...new Set([...(next.actionTaken ?? []), v])];
+      if (/police/i.test(v) && !NEGATIVE.test(v)) add("police", "Police attended");
+      if (/ambulance/i.test(v) && !NEGATIVE.test(v)) add("ambulance", "Ambulance called");
+    } else if (key !== "involved" && key !== "type" && key !== "footage") {
+      next.notes = [...(next.notes ?? []), { key, question: key, answer: v }];
+    }
+  }
+
+  next.outcomes = outcomes;
+  next.asked = [...asked];
+  return next;
+}
+
 export function isReady(inc) {
   return nextQuestion(inc) === null;
 }

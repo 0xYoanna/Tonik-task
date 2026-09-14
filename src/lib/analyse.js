@@ -24,6 +24,7 @@ function locally(text) {
     kind: isOffTopic(text) ? "off_topic" : incidents.length ? "incident" : "section_note",
     incidents,
     sections: matchSections(text),
+    answered: [], // no key: harvest() covers this instead
     source: "keywords",
   };
 }
@@ -62,14 +63,14 @@ function hydrate(raw, text) {
   });
 }
 
-export async function analyse(text) {
+export async function analyse(text, { outstanding = [] } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     const res = await fetch("/api/analyse", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text, floorplan, now: shiftNow() }),
+      body: JSON.stringify({ text, floorplan, now: shiftNow(), outstanding }),
       signal: controller.signal,
     });
     if (!res.ok) throw new Error(`analyse ${res.status}`);
@@ -78,6 +79,7 @@ export async function analyse(text) {
       kind: raw.kind,
       incidents: hydrate(raw, text),
       sections: raw.sections ?? [],
+      answered: raw.answered ?? [],
       source: "model",
     };
   } catch {

@@ -41,7 +41,9 @@ export default function Composer() {
     /* analyse() answers from the model when a key is configured and
        from the local detector when it isn't — it never rejects, so
        there's no error branch to get wrong here. */
-    analyse(value).then((analysis) => report.say(value, analysis));
+    analyse(value, { outstanding: report.outstanding }).then((analysis) =>
+      report.say(value, analysis),
+    );
   };
 
   const onKeyDown = (e) => {

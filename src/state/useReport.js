@@ -17,6 +17,7 @@ import {
   nextQuestion, applyAnswer, isReady, saysDone, saysNothing, opening,
   reportOpening, looksSubstantive, unclassified, groupOf, saysAttaching, isOffTopic,
   CONFIRM_Q, CHANGE_Q, saidYes, saidNo, applyCorrection, saidLogAsIs, QUICK_KEYS,
+  applyAnswered, outstandingKeys,
 } from "../lib/conversation.js";
 import { evidence } from "../data/sampleShift.js";
 import { shiftNow } from "../lib/clock.js";
@@ -259,8 +260,13 @@ export function reducer(state, action) {
           );
           return advance({ ...next, incidents, pending: null });
         } else {
+          /* The model's reading of what this message settled wins
+             when it answered; harvest()'s keyword scan inside
+             applyAnswer is the fallback when it didn't. */
           incidents = incidents.map((i) =>
-            i.id === incidentId ? applyAnswer(i, question, text) : i,
+            i.id === incidentId
+              ? applyAnswered(applyAnswer(i, question, text), action.analysis?.answered)
+              : i,
           );
           /* "Not an incident" — drop it outright. Whatever got it
              here (a missed off-topic guess, a manager thinking
@@ -552,6 +558,14 @@ export function buildValue(state, dispatch) {
       SECTIONS,
       coveredCount: SECTIONS.filter((s) => state.covered?.[s.key]).length,
       open: state.incidents.filter((i) => !i.logged),
+      /* What the model needs to know to say which questions a
+         message settles. */
+      outstanding: outstandingKeys(
+        state.pending
+          ? state.incidents.find((i) => i.id === state.pending.incidentId)
+          : state.incidents.find((i) => (state.mode === "quick" ? !i.logged : !i.full)),
+        state.mode === "quick",
+      ),
       preservations: logged.filter((i) => i.preservation).map((i) => ({ id: i.id, ...i.preservation, at: i.occurredAt, location: i.location })),
       byId: (id) => state.incidents.find((i) => i.id === id),
       TYPES,
