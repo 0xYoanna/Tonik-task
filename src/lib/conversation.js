@@ -190,10 +190,13 @@ export function applyAnswer(inc, question, text) {
   const asked = [...(inc.asked ?? []), question.key];
   const next = { ...inc, asked };
 
-  if (UNKNOWN.test(answer)) {
+  /* "I don't know" only means the whole answer when that IS the
+     whole answer. "David and Mike but I don't know the surnames"
+     carries two names — bailing on the phrase threw them away. */
+  if (UNKNOWN.test(answer) && answer.length < 30) {
     // Recorded as not known. Never backfilled with a guess.
     next.unknowns = [...(next.unknowns ?? []), question.key];
-    return next;
+    return harvest(next, text);
   }
 
   switch (question.field) {
@@ -233,11 +236,20 @@ export function applyAnswer(inc, question, text) {
     /* Names reach the record only because a human typed them.
        There is no path from detection to this field. */
     case "involved": {
-      if (!/nobody|none|no one|unknown|didn'?t get/i.test(answer))
-        next.personsInvolved = [
-          ...next.personsInvolved,
-          ...answer.split(/,| and /).map((s) => s.trim()).filter(Boolean),
-        ];
+      if (!/nobody|none|no one|didn'?t get/i.test(answer)) {
+        /* Take only the naming part of the sentence. Everything
+           after the first full stop or "but" is commentary, and
+           splitting the whole thing on commas turns half a
+           paragraph into a person's name. */
+        const namesPart = answer
+          .split(/[.!?]/)[0]
+          .split(/\s+\b(?:but|though|although|however)\b\s+/i)[0];
+        const found = namesPart
+          .split(/,|\band\b|\+/)
+          .map((s) => s.trim().replace(/^(a |the |some )/i, ""))
+          .filter((s) => s.length > 1 && s.length <= 40);
+        next.personsInvolved = [...new Set([...next.personsInvolved, ...found])];
+      }
       break;
     }
 
@@ -289,6 +301,85 @@ export function applyAnswer(inc, question, text) {
       break;
     }
   }
+  /* Whatever else that sentence settled, settle it now — so a
+     question already answered in passing never gets asked. */
+  return harvest(next, text);
+}
+
+/* ── Harvest ───────────────────────────────────────────────────
+   People don't answer one question at a time. "David was hurt, we
+   didn't call ambulance nor police" answers three, and asking them
+   again is the fastest way to make a conversation feel stupid.
+
+   So every message is scanned for everything it settles, not just
+   the field that was asked about. Questions whose answers are
+   already in the transcript never get asked. */
+
+const NEG_NEAR = /\b(no|not|nor|neither|nobody|none|never|without|didn'?t|did not|wasn'?t|weren'?t|haven'?t|hadn'?t)\b/i;
+
+function negatedNear(lower, idx) {
+  return NEG_NEAR.test(lower.slice(Math.max(0, idx - 36), idx));
+}
+
+function mentions(lower, re) {
+  const m = re.exec(lower);
+  return m ? { idx: m.index, negated: negatedNear(lower, m.index) } : null;
+}
+
+export function harvest(inc, text) {
+  const next = { ...inc };
+  const asked = new Set(next.asked ?? []);
+  const lower = text.toLowerCase();
+  const outcomes = [...(next.outcomes ?? [])];
+  const add = (key, label) => {
+    if (!outcomes.some((o) => o.key === key)) outcomes.push({ key, label });
+  };
+
+  /* Injury — and when it's explicitly ruled out, the two
+     follow-ups that only exist because of it go with it. */
+  if (!asked.has("injury")) {
+    const hurt = mentions(lower, /\b(hurt|injured|injury|bleeding|glassed|broke (his|her|their)|split (his|her|their)|cut (his|her|their))\b/);
+    if (hurt) {
+      asked.add("injury");
+      next.injury = !hurt.negated;
+      if (hurt.negated) {
+        asked.add("injuryDetail");
+        asked.add("riddor");
+      } else {
+        add("harm", "Someone was injured");
+      }
+    }
+  }
+
+  const ambulance = mentions(lower, /\b(ambulance|paramedics?)\b/);
+  if (ambulance) {
+    asked.add("ambulance");
+    if (!ambulance.negated) add("ambulance", "Ambulance called");
+  }
+
+  const police = mentions(lower, /\b(police|cops|999|112)\b/);
+  if (police) {
+    asked.add("police");
+    if (police.negated) asked.add("policeRef"); // no police, no reference
+    else add("police", "Police attended");
+  }
+
+  if (mentions(lower, /\bfirst aid\b/)) add("first_aid", "First aid given");
+  if (mentions(lower, /\b(banned|barred)\b/)) add("banned", "Person banned");
+
+  /* Staff are a closed list, so a name in the text is unambiguous. */
+  const named = rota.filter((r) =>
+    new RegExp(`\\b${r.name.split(" ")[0]}\\b`, "i").test(text),
+  );
+  if (named.length) {
+    asked.add("staff");
+    next.staffPresent = [...new Set([...(next.staffPresent ?? []), ...named.map((r) => r.name)])];
+  }
+
+  if (mentions(lower, /\b(no witnesses|nobody saw|no one saw)\b/)) asked.add("witnesses");
+
+  next.outcomes = outcomes;
+  next.asked = [...asked];
   return next;
 }
 
@@ -494,7 +585,7 @@ export function applyCorrection(inc, text) {
 
   next.corrections = [...(next.corrections ?? []), { at: new Date().toISOString(), text: text.trim() }];
   next.asked = (next.asked ?? []).filter((k) => k !== "confirm"); // ask again
-  return next;
+  return harvest(next, text);
 }
 
 /* Nine refusals at the door become one question, not nine. */
