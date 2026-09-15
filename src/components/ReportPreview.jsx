@@ -1,7 +1,7 @@
 import { PanelRightClose, FileText } from "lucide-react";
 import { useReport } from "../state/useReport.js";
 import { SECTIONS } from "../lib/sections.js";
-import { venue, shift } from "../data/sampleShift.js";
+import { venue, shift, evidence } from "../data/sampleShift.js";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -20,7 +20,7 @@ export default function ReportPreview() {
   const covered = report.covered ?? {};
 
   return (
-    <aside className="flex w-[26rem] shrink-0 flex-col border-l bg-card">
+    <aside className="flex w-[34rem] shrink-0 flex-col border-l bg-card">
       <header className="flex items-center gap-2 border-b px-4 py-3">
         <FileText className="size-4 text-muted-foreground" />
         <span className="text-sm font-medium">Report preview</span>
@@ -56,6 +56,12 @@ export default function ReportPreview() {
           {SECTIONS.map((s) => {
             const c = covered[s.key];
 
+            /* A report is what happened, not a list of headings
+               nothing was said under. Empty sections are tracked in
+               the checklist above; they don't belong in the
+               document. */
+            if (s.key !== "incidents" && !c) return null;
+
             if (s.key === "incidents") {
               return (
                 <section key={s.key} className="mb-4">
@@ -63,39 +69,62 @@ export default function ReportPreview() {
                     {s.label}
                   </h3>
                   {report.logged.length ? (
-                    <ul className="mt-1.5 space-y-2">
+                    <ul className="mt-2 space-y-3">
                       {report.logged.map((i) => (
-                        <li key={i.id} className="border-l-2 pl-2.5">
+                        <li key={i.id} className="border-l-2 pl-3">
                           <div className="text-sm font-medium tabular-nums">
-                            {i.occurredAt} · {i.typeLabel}
+                            {i.occurredAt ?? "time not recorded"} · {i.typeLabel}
                           </div>
-                          <div className="text-xs text-muted-foreground">
-                            {i.location ?? "location not recorded"}
-                            {i.preservation && ` · ${i.preservation.camera} ${i.preservation.window.from}–${i.preservation.window.to}`}
-                          </div>
-                          <p className="mt-0.5 text-xs text-muted-foreground italic">
+
+                          {/* The register entry in full — a one-line
+                              log is not a report. */}
+                          <dl className="mt-1">
+                            {[
+                              ["Location", i.location ?? "not recorded"],
+                              ["Persons", i.personsInvolved?.length ? i.personsInvolved.join("; ") : "none identified"],
+                              ["Staff", i.staffPresent?.length ? i.staffPresent.join(", ") : "not recorded"],
+                              ["Action", i.actionTaken?.length ? i.actionTaken.join(", ") : "not recorded"],
+                              ["Injury", i.injury === true ? "yes" : i.injury === false ? "none reported" : "not recorded"],
+                              ...(i.outcomes?.length ? [["Notifications", i.outcomes.map((o) => o.label).join("; ")]] : []),
+                            ].map(([k, v]) => (
+                              <div key={k} className="flex gap-2 py-0.5 text-xs">
+                                <dt className="w-24 shrink-0 font-medium text-muted-foreground">{k}</dt>
+                                <dd className="flex-1">{v}</dd>
+                              </div>
+                            ))}
+                          </dl>
+
+                          <p className="mt-1.5 border-l-2 pl-2 text-xs leading-relaxed text-muted-foreground italic">
                             {i.description}
                           </p>
-                          {i.personsInvolved?.length > 0 && (
-                            <p className="text-xs text-muted-foreground">
-                              Involved: {i.personsInvolved.join(", ")}
-                            </p>
-                          )}
-                          {i.staffPresent?.length > 0 && (
-                            <p className="text-xs text-muted-foreground">
-                              Staff: {i.staffPresent.join(", ")}
-                            </p>
-                          )}
-                          {i.actionTaken?.length > 0 && (
-                            <p className="text-xs text-muted-foreground">
-                              Action: {i.actionTaken.join(", ")}
-                            </p>
-                          )}
                           {i.notes?.map((n) => (
                             <p key={n.key} className="text-xs text-muted-foreground">
-                              {n.question} {n.answer}
+                              {n.answer}
                             </p>
                           ))}
+
+                          {(i.preservation || i.attachments?.length > 0) && (
+                            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                              {i.preservation && (
+                                <figure className="overflow-hidden rounded-md border">
+                                  <img src={evidence.cctv.src} alt="CCTV still"
+                                    className="max-h-24 w-full bg-muted object-cover" />
+                                  <figcaption className="border-t px-2 py-1 text-xs text-muted-foreground tabular-nums">
+                                    {i.preservation.camera} · {i.preservation.window.from}–{i.preservation.window.to}
+                                  </figcaption>
+                                </figure>
+                              )}
+                              {i.attachments?.length > 0 && (
+                                <figure className="overflow-hidden rounded-md border">
+                                  <img src={evidence.note.src} alt={evidence.note.label}
+                                    className="max-h-24 w-full bg-muted object-cover object-top" />
+                                  <figcaption className="border-t px-2 py-1 text-xs text-muted-foreground">
+                                    {evidence.note.label}
+                                  </figcaption>
+                                </figure>
+                              )}
+                            </div>
+                          )}
                         </li>
                       ))}
                     </ul>
@@ -122,20 +151,7 @@ export default function ReportPreview() {
                       </span>
                     )}
                   </p>
-                ) : (
-                  <div className="mt-1 flex items-center gap-2">
-                    <p className="flex-1 text-sm text-muted-foreground">
-                      Nothing recorded — that's fine.
-                    </p>
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      onClick={() => report.skipSection(s.key)}
-                    >
-                      Nothing to add
-                    </Button>
-                  </div>
-                )}
+                ) : null}
               </section>
             );
           })}
