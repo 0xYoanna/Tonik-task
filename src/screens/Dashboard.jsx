@@ -104,9 +104,9 @@ export default function Dashboard() {
             <h1 className="text-xl font-semibold">{venue.name}</h1>
             <Badge variant="secondary">{shift.status}</Badge>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {venue.date} · {venue.hours} · opened {shift.openedAt} · last call{" "}
-            {shift.lastCall}
+          <p className="mt-1 text-sm text-muted-foreground tabular-nums">
+            {venue.date} · {venue.hours} · last call {shift.lastCall} · cleared{" "}
+            {shift.clearedAt}
           </p>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Duty manager <span className="text-foreground">{shift.dutyManager}</span>{" "}
@@ -116,16 +116,21 @@ export default function Dashboard() {
 
         {/* The one number the view leads with. */}
         <div className="ml-auto text-right">
+          {/* At close the number that matters is the night's
+              total, not the live count — the room is empty. */}
           <div className="text-xs font-medium text-muted-foreground">
-            Guests inside now
+            Admitted tonight
           </div>
-          <div className="text-5xl leading-none font-semibold">{guests.inside}</div>
+          <div className="text-5xl leading-none font-semibold">{guests.admitted}</div>
           <div className="mt-2 w-44">
-            <Progress value={(guests.inside / guests.capacity) * 100} />
+            <Progress value={(guests.peak / guests.capacity) * 100} />
             <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-              <span>of {guests.capacity} capacity</span>
-              <span>{Math.round((guests.inside / guests.capacity) * 100)}%</span>
+              <span>peak {guests.peak} of {guests.capacity}</span>
+              <span>{Math.round((guests.peak / guests.capacity) * 100)}%</span>
             </div>
+          </div>
+          <div className="mt-1.5 text-xs text-muted-foreground tabular-nums">
+            Venue cleared {shift.clearedAt} · none inside
           </div>
         </div>
       </header>
@@ -136,9 +141,9 @@ export default function Dashboard() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
           icon={Users}
-          label="Admitted tonight"
-          value={guests.admitted}
-          sub={`Peak ${guests.peak} at ${guests.peakAt} · ${guests.refused} refused`}
+          label="Refused at the door"
+          value={guests.refused}
+          sub={`Peak ${guests.peak} at ${guests.peakAt} · none inside now`}
         />
         <Stat
           icon={ClipboardList}
@@ -375,7 +380,7 @@ export default function Dashboard() {
           <dl className="space-y-2.5 text-sm">
             {[
               ["Admitted", guests.admitted],
-              ["Inside now", guests.inside],
+              ["Inside now", `${guests.inside} — cleared ${shift.clearedAt}`],
               ["Peak occupancy", `${guests.peak} at ${guests.peakAt}`],
               ["Refused entry", guests.refused],
               ["Capacity", guests.capacity],
