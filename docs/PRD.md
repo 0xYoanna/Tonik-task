@@ -281,7 +281,6 @@ Scope held deliberately tight, per the brief's eight-hour cap.
 4. **Does the door team file separately today?** If so, reconciling two accounts of one ejection is a real design problem and probably a v2 headline feature.
 5. **Is the manager's raw dump discoverable?** We're arguing to retain it permanently for defensibility. A defence solicitor might argue the opposite. Worth a legal opinion before we commit the data model.
 
-> **On the brief itself.** One push-back worth putting to Kris: the brief frames the target as "a complete, legally defensible shift report in under 10 minutes". *Completeness* across thirteen optional sections and *legal defensibility* on incidents are different goals that pull in opposite directions — and optimising for the first is how you end up with thirteen thin sections and one incident described in six words. I've designed for defensibility on incidents and radical optionality everywhere else. If the client actually wants section coverage, that's a materially different product and I'd want to hear the reasoning.
 
 ---
 

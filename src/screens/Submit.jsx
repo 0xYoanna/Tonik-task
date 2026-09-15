@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useReport } from "../state/useReport.js";
-import { venue } from "../data/sampleShift.js";
+import { venue, evidence } from "../data/sampleShift.js";
+import FullReport from "../components/FullReport.jsx";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
@@ -134,6 +135,14 @@ export default function Submit() {
         {venue.date} · {venue.name} · licence {venue.licence}
       </p>
 
+      {/* The document itself, not a summary of it. This is what
+          the signature attaches to, so it's what they read. */}
+      {report.narrative && (
+        <div className="mt-5">
+          <FullReport narrative={report.narrative} />
+        </div>
+      )}
+
       <div className="mt-5 rounded-lg border border-border bg-card p-5 shadow-sm">
         <div className="text-xs font-medium text-muted-foreground mb-2">
           {report.logged.length} incident{report.logged.length === 1 ? "" : "s"}
@@ -150,15 +159,24 @@ export default function Submit() {
 
       {report.preservations.length > 0 && (
         <div className="mt-3 rounded-lg border border-border bg-muted p-5">
-          <div className="text-xs font-medium text-muted-foreground mb-1.5 text-muted-foreground">
+          <div className="mb-2 text-xs font-medium text-muted-foreground">
             Before you go — {report.preservations.length} footage export
             {report.preservations.length === 1 ? "" : "s"}
           </div>
-          {report.preservations.map((p) => (
-            <div key={p.id} className="py-0.5 text-sm text-foreground tabular-nums">
-              {p.window.from}–{p.window.to} · {p.camera} · {p.location}
-            </div>
-          ))}
+          <div className="grid gap-2 sm:grid-cols-2">
+            {report.preservations.map((p) => (
+              <figure key={p.id} className="overflow-hidden rounded-md border bg-card">
+                <img
+                  src={evidence.cctv.src}
+                  alt={`${p.camera} still`}
+                  className="max-h-32 w-full bg-muted object-cover"
+                />
+                <figcaption className="border-t px-2 py-1.5 text-xs text-muted-foreground tabular-nums">
+                  {p.camera} · {p.window.from}–{p.window.to} · {p.location}
+                </figcaption>
+              </figure>
+            ))}
+          </div>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
             These overwrite on their own. The report survives; the footage
             doesn't, unless someone moves it tonight.

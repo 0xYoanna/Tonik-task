@@ -6,7 +6,6 @@
 export const venue = {
   name: "The Vault",
   address: "14–16 Lower Bridge St, Manchester M3 7EP",
-  licence: "PL/2019/04471",
   capacity: 420,
   manager: "J. Nowak",
   date: "Sat 12 Sep 2026",
@@ -34,12 +33,12 @@ export const floorplan = [
 /* Who was on the rota. Becomes the staff-present list to confirm,
    not compose. */
 export const rota = [
-  { name: "Marek W.", role: "Head door" },
-  { name: "Ana L.", role: "Door" },
-  { name: "Tomas R.", role: "Door" },
-  { name: "Priya S.", role: "Bar lead" },
-  { name: "Danny O.", role: "Bar" },
-  { name: "Kat M.", role: "Floor" },
+  { name: "Marek Wozniak", role: "Head door" },
+  { name: "Ana Lut", role: "Door" },
+  { name: "Tomas Ramus", role: "Door" },
+  { name: "Priya Sukhi", role: "Bar lead" },
+  { name: "Danny Omar", role: "Bar" },
+  { name: "Kat Mitten", role: "Floor" },
 ];
 
 /* Cameras, for the preservation request. */
@@ -65,6 +64,7 @@ export const shift = {
   status: "Closing",          // Open · Closing · Filed
   openedAt: "20:48",
   lastCall: "03:30",
+  clearedAt: "04:05",
   dutyManager: venue.manager,
   dps: "R. Okonkwo",          // designated premises supervisor
   onShiftSince: "20:30",
@@ -72,16 +72,16 @@ export const shift = {
 
 /* Who is actually here, versus who was rostered. */
 export const onShift = [
-  { name: "Marek W.", role: "Head door", in: "20:30", status: "on" },
-  { name: "Ana L.", role: "Door", in: "20:30", status: "on" },
-  { name: "Tomas R.", role: "Door", in: "21:00", status: "on" },
-  { name: "Priya S.", role: "Bar lead", in: "20:15", status: "on" },
-  { name: "Danny O.", role: "Bar", in: "20:45", status: "left" },
-  { name: "Kat M.", role: "Floor", in: "21:00", status: "on" },
+  { name: "Marek Wozniak", role: "Head door", in: "20:30", status: "on" },
+  { name: "Ana Lut", role: "Door", in: "20:30", status: "on" },
+  { name: "Tomas Ramus", role: "Door", in: "21:00", status: "on" },
+  { name: "Priya Sukhi", role: "Bar lead", in: "20:15", status: "on" },
+  { name: "Danny Omar", role: "Bar", in: "20:45", status: "left" },
+  { name: "Kat Mitten", role: "Floor", in: "21:00", status: "on" },
 ];
 
 export const guests = {
-  inside: 212,
+  inside: 0, // venue cleared — this is the close-of-shift view
   admitted: 387,
   capacity: 420,
   peak: 398,
@@ -210,16 +210,33 @@ export const evidence = {
     src: "/img/note.jpeg",
     label: "Door team incident slip",
     from: "Marek W.",
+    attribution: "Account given by Marek W., door.",
+    ref: "Ref: original slip same night, 01:40.",
     transcription: [
-      { field: "Time", value: "01:40" },
-      { field: "Location", value: "Smoking area, by the side gate" },
-      { field: "Involved", value: "Two males — one in a red shirt, one in a grey jacket" },
-      { field: "What happened", value: "Shoving, no punches landed. Separated in under a minute." },
-      { field: "Action", value: "Both walked out via the side gate. Neither wanted police." },
-      { field: "Injuries", value: "None seen" },
-      { field: "Names", value: "Both refused to give details" },
+      { field: "Time", value: "approx 01:40" },
+      { field: "Where", value: "smoking area, by side gate" },
+      {
+        field: "Involved",
+        value: "David Hoffman, red t-shirt\nSam Mikk, grey jacket",
+      },
+      {
+        field: "What happened",
+        value:
+          "fight, not just shoving. Punches thrown both ways. Door staff in, separated them. Hoffman bleeding from nose and from brow bone. Mikk no visible injury.",
+      },
+      { value: "Both were drunk but responsive." },
+      { value: "Ambulance was called and medic took care of the injured men." },
+      { value: "Police was not called. Hoffman didn't want them." },
+      {
+        field: "Action",
+        value:
+          "both escorted off premises. Friends of both on scene, took care of them on the way out.",
+      },
+      {
+        value:
+          "After ambulance left, Hoffman was transported to his home by Uber called by his friends",
+      },
     ],
-    unreadable: "One line under 'Action' is too faint to read — it may be a time.",
   },
   cctv: {
     src: "/img/CCTV.jpeg",

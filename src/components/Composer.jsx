@@ -35,7 +35,7 @@ export default function Composer() {
     if (!value) return;
     setText("");
     if (mic.listening) mic.stop();
-    report.think();
+    report.think(value);
     boxRef.current?.focus();
 
     /* analyse() answers from the model when a key is configured and
@@ -55,7 +55,7 @@ export default function Composer() {
 
   return (
     <div className="border-t border-border bg-background/80 backdrop-blur">
-      <div className="mx-auto w-full max-w-3xl px-6 py-3">
+      <div className="mx-auto w-full max-w-2xl px-6 py-3">
         {mic.listening && (
           <div className="mb-2 flex items-start gap-2 rounded-lg border border-border bg-muted px-3 py-2">
             <span className="relative mt-1 flex size-2 shrink-0">

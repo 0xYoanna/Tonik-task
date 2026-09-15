@@ -17,7 +17,7 @@ import {
   nextQuestion, applyAnswer, isReady, saysDone, saysNothing, opening,
   reportOpening, looksSubstantive, unclassified, groupOf, saysAttaching, isOffTopic,
   CONFIRM_Q, CHANGE_Q, saidYes, saidNo, applyCorrection, saidLogAsIs, QUICK_KEYS,
-  applyAnswered, outstandingKeys,
+  applyAnswered, outstandingKeys, saysShowReport, saysFinishReport,
 } from "../lib/conversation.js";
 import { evidence } from "../data/sampleShift.js";
 import { shiftNow } from "../lib/clock.js";
@@ -108,8 +108,11 @@ function advance(state) {
     }
 
     /* Already in the register from a mid-shift log — this pass
-       only filled in the detail it was missing. */
+       only filled in the detail it was missing. Carry on rather
+       than returning: stopping here left the conversation waiting
+       to be spoken to, and the evidence question never came. */
     thread.push(msg("ai", "text", "Updated."));
+    continue;
     return { ...state, thread, incidents, pending: null };
   }
 
@@ -120,16 +123,13 @@ function advance(state) {
     return { ...state, thread, incidents, pending: null };
   }
 
-  /* Two suggestions at most, and only twice. Thirteen questions
-     would produce thirteen padded answers, which is worse than
-     honest blanks. */
-  const nudge = suggestNext(state.covered ?? {});
-  const nudges = state.nudges ?? 0;
-  if (nudge.length && nudges < 2) {
-    thread.push(msg("ai", "text",
-      `Anything on ${nudge.map((s) => s.label.toLowerCase()).join(" or ")}? If not, say so and we'll sign it off.`));
-    return { ...state, thread, incidents, pending: null, nudges: nudges + 1 };
-  }
+
+  /* Before the manager has said anything there is nothing to
+     prompt about — the opening on screen already asks how the
+     shift went. Jumping straight to "any photos?" reads as the
+     machine talking to itself. */
+  if (!thread.some((m) => m.role === "manager"))
+    return { ...state, thread, incidents, pending: null };
 
   /* The last thing asked, every time. Evidence is the part that
      can't be reconstructed later — and the part a manager only
@@ -140,7 +140,18 @@ function advance(state) {
     return { ...state, thread, incidents, pending: null, extrasAsked: true };
   }
 
-  thread.push(msg("ai", "text", "That's the night. Ready to sign off?"));
+  /* Say where it went. Repeating "ready to sign off?" after every
+     sentence reads as not listening; naming the heading shows the
+     filing actually happening. */
+  const filed = (state.justFiled ?? [])
+    .map((k) => SECTIONS.find((x) => x.key === k)?.label.toLowerCase())
+    .filter(Boolean);
+  thread.push(
+    msg("ai", "text",
+      filed.length
+        ? `Filed under ${filed.join(" and ")}. Anything else, or say "finish report".`
+        : `Noted. Anything else, or say "finish report".`),
+  );
   return { ...state, thread, incidents, pending: null };
 }
 
@@ -159,12 +170,22 @@ function prepare(inc, quick = false) {
   return {
     ...inc,
     asked,
+    /* Persist the decision. Without this the footage flagged on a
+       mid-shift log vanished when the end-of-shift pass re-prepared
+       the record — the evidence trail quietly dropping out of the
+       report it exists for. */
+    preserve,
     full: !quick || nextQuestion({ ...inc, asked, preserve }, false) === null,
     severity,
+    /* If they saved before giving a time, build the window from
+       when it was reported instead. The incident time stays
+       unknown — that stays honest — but the footage gets flagged
+       rather than lost, and footage is the part that expires. */
     preservation:
-      preserve && inc.occurredAt
+      preserve && (inc.occurredAt || inc.capturedAt)
         ? {
-            window: preservationWindow(inc.occurredAt),
+            basedOn: inc.occurredAt ? "incident time" : "time reported",
+            window: preservationWindow(inc.occurredAt ?? inc.capturedAt),
             camera: cameraFor(inc.location) ?? "Unassigned camera",
             status: "outstanding",
           }
@@ -174,15 +195,34 @@ function prepare(inc, quick = false) {
 
 export function reducer(state, action) {
   switch (action.type) {
-    case "thinking":
-      return { ...state, thinking: true };
+    /* The manager's words go up the moment they hit send. Reading
+       them can take a couple of seconds against the model, and
+       watching your own sentence vanish while you wait is the
+       fastest way to lose trust in a chat. */
+    case "thinking": {
+      const text = (action.text ?? "").trim();
+      if (!text) return { ...state, thinking: true };
+      return {
+        ...state,
+        thinking: true,
+        thread: [...state.thread, msg("manager", "text", text)],
+        raw: [...state.raw, { id: `raw_${state.raw.length + 1}`, text, at: new Date().toISOString() }],
+      };
+    }
 
     case "say": {
       const text = action.text.trim();
       if (!text) return state;
 
-      const thread = [...state.thread, msg("manager", "text", text)];
-      const raw = [...state.raw, { id: `raw_${state.raw.length + 1}`, text, at: new Date().toISOString() }];
+      /* Already on screen if it went up when they pressed send. */
+      const shown =
+        state.thread.length &&
+        state.thread[state.thread.length - 1].role === "manager" &&
+        state.thread[state.thread.length - 1].text === text;
+      const thread = shown ? [...state.thread] : [...state.thread, msg("manager", "text", text)];
+      const raw = shown
+        ? state.raw
+        : [...state.raw, { id: `raw_${state.raw.length + 1}`, text, at: new Date().toISOString() }];
       let incidents = [...state.incidents];
       let next = {
         ...state,
@@ -194,6 +234,20 @@ export function reducer(state, action) {
            a curl. */
         lastSource: action.analysis?.source ?? "keywords",
       };
+
+      /* A command outranks an outstanding question. Asking to
+         finish while a question is open must not be filed as the
+         answer to that question. */
+      if (state.mode !== "quick" && saysFinishReport(text)) {
+        return {
+          ...next,
+          incidents,
+          drafting: true,
+          finishing: true,
+          pending: null,
+          thread: [...thread, msg("ai", "text", "Writing up the whole shift. One moment.")],
+        };
+      }
 
       /* Answering the question it just asked. */
       if (state.pending) {
@@ -223,14 +277,17 @@ export function reducer(state, action) {
           return advance({ ...next, incidents, pending: null });
         } else if (question.key === "approve") {
           if (saidYes(text)) {
-            return {
+            /* The incident is settled; the shift isn't. Carry on
+               through the rest of the night rather than jumping to
+               a signature — say "finish report" when done. */
+            return advance({
               ...next,
               incidents,
               pending: null,
-              phase: "summary",
+              approved: true,
               thread: [...thread, msg("ai", "text",
-                "Filed as written. Sign it off and it's in the register.")],
-            };
+                "Filed as written. Now the rest of the night — say \"finish report\" when you're done.")],
+            });
           }
           /* A change request rewrites the account rather than
              patching it, so the prose and the record can't drift. */
@@ -312,6 +369,17 @@ export function reducer(state, action) {
         return advance({ ...next, incidents, pending: null });
       }
 
+      /* Asked for the document itself. */
+      if (state.mode !== "quick" && saysShowReport(text) && incidents.length) {
+        return {
+          ...next,
+          incidents,
+          drafting: true,
+          pending: null,
+          thread: [...thread, msg("ai", "text", "Pulling it together now.")],
+        };
+      }
+
       /* Not report content. Decline in one line and write nothing
          — a question about the weather must never reach a register
          that's kept for four years. No lecture: the manager made a
@@ -340,6 +408,14 @@ export function reducer(state, action) {
       /* Evidence being handed over, not more narrative. */
       if (saysAttaching(text)) {
         const target = incidents.filter((i) => i.logged).slice(-1)[0];
+        /* On the record, not only in the transcript — otherwise the
+           report can't show what was attached to it. */
+        if (target)
+          incidents = incidents.map((i) =>
+            i.id === target.id
+              ? { ...i, attachments: [...new Set([...(i.attachments ?? []), evidence.note.label])] }
+              : i,
+          );
         return {
           ...next,
           incidents,
@@ -362,6 +438,9 @@ export function reducer(state, action) {
         if (hit.length) {
           next.covered = { ...state.covered };
           for (const k of hit) next.covered[k] = { how: "said", note: text.trim() };
+          next.justFiled = hit;
+        } else {
+          next.justFiled = null;
         }
       }
 
@@ -400,10 +479,9 @@ export function reducer(state, action) {
           thread: [
             ...thread,
             msg("ai", "text", incidents.length
-              ? "Understood. Nothing else to add then — here's what I'll file."
-              : "A clean night, then. I'll record that nothing happened — you'll sign it, and that signature is what proves the venue was running its process tonight."),
+              ? "Understood — nothing else to add. Say \"finish report\" when you want to sign it off."
+              : "A clean night, then. I'll record that nothing happened — say \"finish report\" and you can sign it. That signature is what proves the venue was running its process tonight."),
           ],
-          phase: "summary",
         };
       }
 
@@ -423,7 +501,11 @@ export function reducer(state, action) {
       }));
 
       if (found.length) incidents = [...incidents, ...found];
-      else if (looksSubstantive(text))
+      else if (looksSubstantive(text) && !matchSections(text).length)
+        /* Only open an unclassified record when the sentence
+           belongs nowhere else. "Bar was busy" is a bar note, and
+           interrogating it as an incident is how a register fills
+           with noise. */
         incidents = [...incidents, unclassified(text, `inc_u${state.raw.length}`)];
       else if (!incidents.length)
         return {
@@ -503,14 +585,9 @@ export function reducer(state, action) {
           note: `${state.incidents.length} logged during the shift.`,
         };
 
-      const thread = [
-        ...lines.map((l, i) => msg("ai", i === lines.length - 1 ? "text" : "context", l)),
-        msg("ai", "checklist", ""),
-        msg("ai", "text",
-          "I've filled in what I already know from tonight — tasks, stock, " +
-          "maintenance, the door. Tell me if any of it changed, or just talk " +
-          "me through the night and I'll file it under the right headings."),
-      ];
+      /* Nothing to say yet — ReportStart carries the opening as
+         screen text, and advance() asks the first real question. */
+      const thread = [];
 
       /* Don't wait to be spoken to. It already knows what was
          logged mid-shift and what those records are missing, so it
@@ -533,12 +610,24 @@ export function reducer(state, action) {
     case "summary":
       return { ...state, phase: "summary" };
 
+    /* Back to the conversation you came from. "talking" was a
+       phase that no longer exists, so this button did nothing. */
     case "back":
-      return { ...state, phase: "talking" };
+      return { ...state, phase: state.mode === "quick" ? "quick" : "report" };
 
     /* The written account, once the record is complete. Nothing is
        filed until the manager has read it and said so. */
     case "narrative":
+      if (state.finishing)
+        return {
+          ...state,
+          drafting: false,
+          finishing: false,
+          narrative: action.narrative,
+          narrativeSource: action.source,
+          pending: null,
+          phase: "summary",
+        };
       return {
         ...state,
         drafting: false,
@@ -551,6 +640,30 @@ export function reducer(state, action) {
           msg("ai", "question", APPROVE_Q.q, { question: APPROVE_Q }),
         ],
       };
+
+    /* Save whatever we have, whenever they say so. Skips the rest
+       of the probing and files the record as it stands — with
+       blanks left blank, never filled in to look complete. */
+    case "save-now": {
+      const open = state.incidents.find((i) => !i.logged);
+      if (!open) return state;
+      const settled = {
+        ...open,
+        asked: [...new Set([...(open.asked ?? []), ...QUICK_KEYS, "confirm"])],
+      };
+      const record = { ...prepare(settled, true), logged: true, loggedAt: new Date().toISOString() };
+      return {
+        ...state,
+        pending: null,
+        incidents: state.incidents.map((i) => (i.id === record.id ? record : i)),
+        thread: [
+          ...state.thread,
+          msg("ai", "record", "", { incidentId: record.id }),
+          msg("ai", "text",
+            "Saved. It'll be in tonight's shift report — you can fill in the rest at close."),
+        ],
+      };
+    }
 
     case "toggle-report":
       return { ...state, showReport: !state.showReport };
@@ -615,7 +728,7 @@ export function buildValue(state, dispatch) {
       TYPES,
 
       say: (text, analysis) => dispatch({ type: "say", text, analysis }),
-      think: () => dispatch({ type: "thinking" }),
+      think: (text) => dispatch({ type: "thinking", text }),
       reopen: (id, field) => dispatch({ type: "reopen", id, field }),
       drop: (id) => dispatch({ type: "drop", id }),
       addPerson: (id, person) => dispatch({ type: "add-person", id, person }),
@@ -624,6 +737,7 @@ export function buildValue(state, dispatch) {
       setNarrative: (narrative, source) => dispatch({ type: "narrative", narrative, source }),
       addReport: () => dispatch({ type: "add-report" }),
       toggleReport: () => dispatch({ type: "toggle-report" }),
+      saveNow: () => dispatch({ type: "save-now" }),
       skipSection: (key) => dispatch({ type: "skip-section", key }),
       toDashboard: () => dispatch({ type: "dashboard" }),
       back: () => dispatch({ type: "back" }),

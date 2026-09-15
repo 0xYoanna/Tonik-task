@@ -101,7 +101,8 @@ const FOLLOW_UPS = {
 
 const UNKNOWN = /\b(no idea|dunno|don'?t know|not sure|can'?t remember|no clue)\b/i;
 const NEGATIVE = /\b(no|nope|none|nothing|didn'?t|did not|nah|negative)\b/i;
-const AFFIRMATIVE = /\b(yes|yeah|yep|yup|ok|okay|sure|please|do it|aye)\b/i;
+const AFFIRMATIVE =
+  /\b(yes|yeah|yep|yup|ok|okay|sure|please|do it|aye|file it|log it|save it|go ahead|that'?s right|looks right|approve)\b/i;
 const DONE = /\b(no|nope|nothing|that'?s it|that is it|all|done|finished|nothing else|we'?re good)\b/i;
 
 /* The next question for one incident, or null if it's ready.
@@ -128,7 +129,6 @@ export function nextQuestion(inc, quick = false) {
       key: "occurredAt",
       field: "occurredAt",
       q: quick ? "When did this happen?" : "What time did that happen?",
-      options: quick ? ["Just now", LOG_AS_IS] : undefined,
     };
 
   /* Location is statutory, and it's also what names the camera —
@@ -139,7 +139,7 @@ export function nextQuestion(inc, quick = false) {
       field: "location",
       q: "Whereabouts in the venue?",
       options: quick
-        ? ["Front door", "Dancefloor", "Smoking area", "Bar 2", LOG_AS_IS]
+        ? ["Front door", "Dancefloor", "Smoking area", "Bar 2"]
         : ["Front door", "Dancefloor", "Smoking area", "Bar 2", "Toilets"],
     };
 
@@ -152,7 +152,6 @@ export function nextQuestion(inc, quick = false) {
         key: "detail",
         field: "note",
         q: "What happened?",
-        options: [LOG_AS_IS],
       };
     return null;
   }
@@ -484,13 +483,26 @@ export function isReady(inc) {
    in the category treats as the user failing to show up. */
 const NOTHING = /\b(nothing to report|nothing happened|nothing at all|nothing kicked off|no incidents|uneventful|dead quiet|quiet one|quiet night|all good|no problems|no trouble|nothing much|nothing really)\b/i;
 
+/* Only when that IS the message. "Crowd were lovely, no trouble"
+   is content for the audience section, not a declaration that the
+   night was empty. */
+const SECTION_SUBJECT =
+  /\b(door|bar|kitchen|crowd|audience|staff|stock|dj|artist|security|queue|toilet|cloakroom|vendor|event|maintenance|inventory|sound|lights)\b/i;
+
 export function saysNothing(text) {
-  return NOTHING.test(text);
+  const t = text.trim();
+  /* "All good on the door" is a door-staff note. Naming any part
+     of the venue makes it content for a section, not a statement
+     that the night was empty. */
+  if (SECTION_SUBJECT.test(t)) return false;
+  return t.length <= 32 && NOTHING.test(t);
 }
 
 export function saysDone(text) {
   const t = text.trim().toLowerCase();
-  return t.length < 30 && DONE.test(t);
+  /* A bare sign-off, not a sentence that happens to contain one of
+     these words. "All good on the door" is a door-staff note. */
+  return t.length <= 22 && DONE.test(t) && !/\b(door|bar|kitchen|crowd|staff|stock|dj|security|queue)\b/.test(t);
 }
 
 /* It opens holding the facts, so nothing already known gets typed. */
@@ -542,6 +554,28 @@ export function isOffTopic(text) {
    of the night — is what lets the attachment land in the thread
    instead of being parsed for incidents. */
 const ATTACHING = /\b(attach|attaching|attached|sending|send you|here'?s|photo|photos|picture|image|screenshot|scan|slip|handover note)\b/i;
+
+/* "Show me the full report." The manager wants to read the thing
+   before they put their name to it — which is the only moment the
+   document's quality actually matters to them. */
+const SHOW_REPORT =
+  /\b(show|see|read|view|give|pull up|open)\b[^.]{0,20}\b(full |whole |final |complete )?report\b|\bfull report\b|\bwhat (will|would) (it|you) file\b/i;
+
+/* Distinct from "show me the report": this one ends the shift.
+   Showing is a read; finishing produces the document to sign. */
+/* Must be aimed at the report. "Bar was busy at the end of the
+   night" is a fact about the shift, not an instruction to end it —
+   the old pattern read "end … night" and filed the whole report. */
+const FINISH_REPORT =
+  /\b(finish|finalise|finalize|complete|submit|wrap up)\b\s+(the\s+|this\s+|my\s+)?(report|shift report|write[- ]?up)\b|\b(finish|done)\b\s+(the\s+)?report\b|\bready to (sign|file)\b|\bsign it off\b/i;
+
+export function saysFinishReport(text) {
+  return FINISH_REPORT.test(text);
+}
+
+export function saysShowReport(text) {
+  return SHOW_REPORT.test(text);
+}
 
 export function saysAttaching(text) {
   return ATTACHING.test(text);
@@ -604,12 +638,11 @@ export function reportOpening(incidents) {
   ];
 }
 
-/* Always on the table while it's probing. The manager is standing
-   up with a radio in their hand — every question has to be
-   skippable in one tap, or the probing becomes the interrogation
-   the quick log exists to avoid. */
-export const LOG_AS_IS = "Log it as is";
-
+/* The probing has to be abandonable at any point, or it becomes
+   the interrogation the quick log exists to avoid. That escape is
+   a Save control on the screen rather than an option in every
+   question — one place to look, and it doesn't fill the thread
+   with the same button over and over. */
 export const QUICK_KEYS = ["type", "occurredAt", "location", "detail"];
 
 export function saidLogAsIs(text) {
