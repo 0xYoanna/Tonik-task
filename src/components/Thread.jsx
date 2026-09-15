@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
 import { useReport } from "../state/useReport.js";
 import RecordCard from "./RecordCard.jsx";
-import Checklist from "./Checklist.jsx";
 import QuickStart from "./QuickStart.jsx";
+import FullReport from "./FullReport.jsx";
+import ReportStart from "./ReportStart.jsx";
 import { evidence } from "../data/sampleShift.js";
 import { Badge } from "@/components/ui/badge";
 import { FileText } from "lucide-react";
@@ -12,17 +13,23 @@ import { Button } from "@/components/ui/button";
    chat anyone has ever used — which is the point: no one needs
    teaching where to look or where to type. */
 
-function Bubble({ children }) {
+/* No bubble on the replies. A card around every sentence makes
+   the system look like another participant in a group chat; plain
+   text on the page reads as the product speaking, and lines up
+   with the opening text above it. */
+function Reply({ children }) {
   return (
-    <div className="max-w-[42rem] rounded-lg rounded-tl-sm bg-card px-3.5 py-2.5 text-sm leading-relaxed text-foreground shadow-sm">
+    <div className="max-w-[42rem] text-base leading-relaxed text-foreground">
       {children}
     </div>
   );
 }
 
+/* The manager's own words keep a bubble — theirs is the input,
+   and it should read as visibly distinct from the response. */
 function Mine({ children }) {
   return (
-    <div className="ml-auto max-w-[36rem] rounded-lg rounded-br-sm bg-primary px-3.5 py-2.5 text-sm leading-relaxed text-white">
+    <div className="ml-auto max-w-[32rem] rounded-2xl bg-muted px-4 py-2.5 text-base leading-relaxed text-foreground">
       {children}
     </div>
   );
@@ -44,7 +51,7 @@ export default function Thread() {
   const untouched = quick && !report.thread.some((m) => m.role === "manager");
 
   const messages = (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-2.5 px-6 py-6">
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-6 py-6">
       {report.thread.map((m) => {
         /* Checked before the role shortcut — an attachment is the
            manager's, but it isn't a text bubble. */
@@ -75,17 +82,6 @@ export default function Thread() {
             </p>
           );
 
-        /* The recommended thirteen. Lives in the opening message
-           and ticks itself as the manager talks. */
-        if (m.kind === "checklist")
-          return (
-            <div key={m.id} className="max-w-[42rem] rounded-lg border bg-card p-3.5 shadow-sm">
-              <div className="mb-2 text-xs font-medium text-muted-foreground">
-                Worth covering — none of it required
-              </div>
-              <Checklist />
-            </div>
-          );
 
 
         /* What it made of the handwriting. Proposed, not committed
@@ -96,48 +92,44 @@ export default function Thread() {
             <div key={m.id} className="max-w-[42rem] rounded-lg border bg-card p-3.5 shadow-sm">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">Read from the slip</span>
-                <Badge variant="secondary">{evidence.note.from}'s handwriting</Badge>
+                <Badge variant="secondary">{evidence.note.from}&rsquo;s handwriting</Badge>
               </div>
-              <dl className="mt-2 space-y-1">
-                {evidence.note.transcription.map((row) => (
-                  <div key={row.field} className="flex gap-2 text-sm">
-                    <dt className="w-28 shrink-0 text-xs font-medium text-muted-foreground">
-                      {row.field}
-                    </dt>
-                    <dd className="flex-1">{row.value}</dd>
-                  </div>
-                ))}
+
+              <div className="mt-1.5 text-xs text-muted-foreground">
+                <div>{evidence.note.attribution}</div>
+                <div className="tabular-nums">{evidence.note.ref}</div>
+              </div>
+
+              <dl className="mt-3 space-y-2 border-t pt-3">
+                {evidence.note.transcription.map((row, i) =>
+                  row.field ? (
+                    <div key={i} className="flex gap-2 text-sm">
+                      <dt className="w-28 shrink-0 text-xs font-medium text-muted-foreground">
+                        {row.field}
+                      </dt>
+                      <dd className="flex-1 leading-relaxed">
+                        {row.value.split("\n").map((line, j) => (
+                          <div key={j}>{line}</div>
+                        ))}
+                      </dd>
+                    </div>
+                  ) : (
+                    /* Lines the door team wrote without a heading —
+                       kept as their own paragraphs rather than
+                       forced into a field they don't belong to. */
+                    <p key={i} className="pl-30 text-sm leading-relaxed">
+                      {row.value}
+                    </p>
+                  ),
+                )}
               </dl>
-              {/* A blank beats a guess — including on handwriting. */}
-              <p className="mt-2 border-t pt-2 text-xs text-muted-foreground">
-                {evidence.note.unreadable}
-              </p>
             </div>
           );
 
-        /* The written account. Rendered as a document because
-           that is what it is — the thing a licensing officer
-           reads, not a message. */
+        /* The document, as it will be filed — register entries,
+           the written account, and the evidence attached to each. */
         if (m.kind === "narrative")
-          return (
-            <article
-              key={m.id}
-              className="max-w-[42rem] rounded-lg border bg-card p-5 shadow-sm"
-            >
-              <div className="mb-3 flex items-center gap-2 border-b pb-2">
-                <FileText className="size-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Written account</span>
-                <span className="text-xs text-muted-foreground">
-                  for the register
-                </span>
-              </div>
-              {m.narrative.split(/\n\n+/).map((para, i) => (
-                <p key={i} className="mb-3 text-sm leading-relaxed last:mb-0">
-                  {para}
-                </p>
-              ))}
-            </article>
-          );
+          return <FullReport key={m.id} narrative={m.narrative} />;
 
         if (m.kind === "record") {
           const inc = report.byId(m.incidentId);
@@ -170,7 +162,7 @@ export default function Thread() {
         }
 
         return (
-          <Bubble key={m.id}>
+          <Reply key={m.id}>
             {m.text}
             {/* Quick answers on the floor, where typing is the
                 cost. At close the manager is sat down and the
@@ -192,7 +184,7 @@ export default function Thread() {
                   ))}
                 </div>
               )}
-          </Bubble>
+          </Reply>
         );
       })}
 
@@ -212,12 +204,17 @@ export default function Thread() {
     </div>
   );
 
-  if (!quick) return messages;
+  const Opening = quick ? QuickStart : ReportStart;
+  /* Full-size and sat above the composer only while there is
+     genuinely nothing else on screen. The moment there's a
+     question to answer it shrinks to a header, so the question
+     isn't pushed below the fold by its own preamble. */
+  const hero = report.thread.length === 0;
 
   return (
-    <div className={untouched ? "flex min-h-full flex-col justify-end" : "flex flex-col"}>
-      <QuickStart opening={untouched} />
-      {!untouched && messages}
+    <div className={hero ? "flex min-h-full flex-col justify-end" : "flex flex-col"}>
+      <Opening opening={hero} />
+      {!hero && messages}
     </div>
   );
 }
