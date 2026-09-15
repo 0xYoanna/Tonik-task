@@ -1,7 +1,8 @@
-import { ArrowLeft, FileCheck2, PanelRightOpen, Zap } from "lucide-react";
+import { ArrowLeft, Check, FileCheck2, PanelRightOpen, Zap } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useReport } from "../state/useReport.js";
 import { narrate } from "../lib/narrative.js";
+import { evidence } from "../data/sampleShift.js";
 import { shiftNow } from "../lib/clock.js";
 import Thread from "../components/Thread.jsx";
 import Composer from "../components/Composer.jsx";
@@ -29,7 +30,20 @@ export default function Conversation() {
   useEffect(() => {
     if (!report.drafting || drafting.current) return;
     drafting.current = true;
-    narrate(report.logged, report.covered, report.narrativeNote).then(({ narrative, source }) => {
+    narrate(
+      report.logged,
+      report.covered,
+      report.narrativeNote,
+      report.logged.some((i) => i.attachments?.length)
+        ? [{
+            label: evidence.note.label,
+            from: evidence.note.from,
+            lines: evidence.note.transcription.map((r) =>
+              (r.field ? `${r.field}: ` : "") + r.value.replace(/\n/g, "; "),
+            ),
+          }]
+        : [],
+    ).then(({ narrative, source }) => {
       drafting.current = false;
       report.setNarrative(narrative, source);
     });
@@ -98,9 +112,26 @@ export default function Conversation() {
         )}
 
         {quick ? (
-          <Button size="sm" variant="outline" onClick={report.toDashboard}>
-            Done
-          </Button>
+          <>
+            {/* Always available, so no question has to carry its
+                own escape. */}
+            <Button
+              size="sm"
+              disabled={!report.open.length}
+              onClick={report.saveNow}
+              title={
+                report.open.length
+                  ? "File it with what you've told me so far"
+                  : "Nothing to save yet"
+              }
+            >
+              <Check />
+              Save incident
+            </Button>
+            <Button size="sm" variant="outline" onClick={report.toDashboard}>
+              Done
+            </Button>
+          </>
         ) : (
           report.logged.length > 0 && (
             <Button size="sm" onClick={report.toSummary}>
